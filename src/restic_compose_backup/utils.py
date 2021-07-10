@@ -63,6 +63,16 @@ def remove_containers(containers: List['Container']):
         except Exception as ex:
             logger.exception(ex)
 
+def join_file_content(file):
+    if not os.path.isfile(file):
+        return ""
+    with open(file) as c:
+        output = ""
+        lines = c.readlines()
+        for i in range(len(lines)):
+            output += lines[i] + ","
+        return output
+
 
 def is_true(value):
     """
@@ -82,6 +92,25 @@ def strip_root(path):
 
     return path
 
+def format_tags(tags: str, arg = "--tag") -> List[str]:
+    """
+    Takes a comma separated list of tags.
+    Splits them and appends --tag to each tag.
+    Use the output as the command line argument for the restic cli.
+    Example: foo,bar,test becomes --tag foo --tag bar --tag test
+    """
+    if not tags:
+        return []
+
+    tags = tags.strip()
+    splitTags = tags.split(",")
+    output = []
+    for tag in splitTags:
+        tag = tag.strip()
+        if tag:
+            output.extend([arg, tag])
+                
+    return output
 
 @contextmanager
 def environment(name, value):

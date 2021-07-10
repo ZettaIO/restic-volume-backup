@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from restic_compose_backup.containers import Container
@@ -8,6 +9,7 @@ from restic_compose_backup import (
 )
 from restic_compose_backup import utils
 
+logger = logging.getLogger(__name__)
 
 class MariadbContainer(Container):
     container_type = 'mariadb'
@@ -16,8 +18,8 @@ class MariadbContainer(Container):
         """dict: get credentials for the service"""
         return {
             'host': self.hostname,
-            'username': self.get_config_env('MYSQL_USER'),
-            'password': self.get_config_env('MYSQL_PASSWORD'),
+            'username': 'root',
+            'password': self.get_config_env('MYSQL_ROOT_PASSWORD'),
             'port': "3306",
         }
 
@@ -25,34 +27,52 @@ class MariadbContainer(Container):
         """Check the availability of the service"""
         creds = self.get_credentials()
 
-        with utils.environment('MYSQL_PWD', creds['password']):
-            return commands.ping_mariadb(
-                creds['host'],
-                creds['port'],
-                creds['username'],
-            )
+        return commands.ping_mariadb(
+            creds['host'],
+            creds['port'],
+            creds['username'],
+            creds['password']
+        )
 
     def dump_command(self) -> list:
         """list: create a dump command restic and use to send data through stdin"""
         creds = self.get_credentials()
+        destination = self.backup_destination_path()
+
         return [
-            "mysqldump",
-            f"--host={creds['host']}",
-            f"--port={creds['port']}",
-            f"--user={creds['username']}",
-            "--all-databases",
+            "mydumper",
+            "--user",
+            creds['username'],
+            "--password",
+            creds['password'],
+            "--host",
+            creds['host'],
+            "--port",
+            creds['port'],
+            "--outputdir",
+            f"{destination}",
+            "--no-views",
+            "--compress",
+            "--verbose",
+            "3"
         ]
 
     def backup(self):
         config = Config()
-        creds = self.get_credentials()
+        destination = self.backup_destination_path()
 
-        with utils.environment('MYSQL_PWD', creds['password']):
-            return restic.backup_from_stdin(
-                config.repository,
-                self.backup_destination_path(),
-                self.dump_command(),
-            )
+        commands.run([
+            "mkdir",
+            "-p",
+            f"{destination}"
+        ])
+        commands.run(self.dump_command())
+
+        return restic.backup_files(
+            config.repository,
+            f"{destination}",
+            tags=self.tags
+        )
 
     def backup_destination_path(self) -> str:
         destination = Path("/databases")
@@ -63,7 +83,6 @@ class MariadbContainer(Container):
                 destination /= project_name
 
         destination /= self.service_name
-        destination /= "all_databases.sql"
 
         return destination
 
@@ -75,8 +94,8 @@ class MysqlContainer(Container):
         """dict: get credentials for the service"""
         return {
             'host': self.hostname,
-            'username': self.get_config_env('MYSQL_USER'),
-            'password': self.get_config_env('MYSQL_PASSWORD'),
+            'username': 'root',
+            'password': self.get_config_env('MYSQL_ROOT_PASSWORD'),
             'port': "3306",
         }
 
@@ -84,34 +103,52 @@ class MysqlContainer(Container):
         """Check the availability of the service"""
         creds = self.get_credentials()
 
-        with utils.environment('MYSQL_PWD', creds['password']):
-            return commands.ping_mysql(
-                creds['host'],
-                creds['port'],
-                creds['username'],
-            )
+        return commands.ping_mysql(
+            creds['host'],
+            creds['port'],
+            creds['username'],
+            creds['password']
+        )
 
     def dump_command(self) -> list:
         """list: create a dump command restic and use to send data through stdin"""
         creds = self.get_credentials()
+        destination = self.backup_destination_path()
+
         return [
-            "mysqldump",
-            f"--host={creds['host']}",
-            f"--port={creds['port']}",
-            f"--user={creds['username']}",
-            "--all-databases",
+            "mydumper",
+            "--user",
+            creds['username'],
+            "--password",
+            creds['password'],
+            "--host",
+            creds['host'],
+            "--port",
+            creds['port'],
+            "--outputdir",
+            f"{destination}",
+            "--no-views",
+            "--compress",
+            "--verbose",
+            "3"
         ]
 
     def backup(self):
         config = Config()
-        creds = self.get_credentials()
+        destination = self.backup_destination_path()
 
-        with utils.environment('MYSQL_PWD', creds['password']):
-            return restic.backup_from_stdin(
-                config.repository,
-                self.backup_destination_path(),
-                self.dump_command(),
-            )
+        commands.run([
+            "mkdir",
+            "-p",
+            f"{destination}"
+        ])
+        commands.run(self.dump_command())
+
+        return restic.backup_files(
+            config.repository,
+            f"{destination}",
+            tags=self.tags
+        )
 
     def backup_destination_path(self) -> str:
         destination = Path("/databases")
@@ -122,7 +159,6 @@ class MysqlContainer(Container):
                 destination /= project_name
 
         destination /= self.service_name
-        destination /= "all_databases.sql"
 
         return destination
 
@@ -171,6 +207,7 @@ class PostgresContainer(Container):
                 config.repository,
                 self.backup_destination_path(),
                 self.dump_command(),
+                tags=self.tags
             )
 
     def backup_destination_path(self) -> str:

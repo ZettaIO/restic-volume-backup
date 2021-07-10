@@ -3,7 +3,7 @@ import os
 
 class Config:
     default_backup_command = "source /env.sh && rcb backup > /proc/1/fd/1"
-    default_crontab_schedule = "0 2 * * *"
+    default_crontab_schedule = "10 2 * * *"
 
     """Bag for config values"""
     def __init__(self, check=True):
@@ -15,15 +15,20 @@ class Config:
         self.swarm_mode = os.environ.get('SWARM_MODE') or False
         self.include_project_name = os.environ.get('INCLUDE_PROJECT_NAME') or False
         self.exclude_bind_mounts = os.environ.get('EXCLUDE_BIND_MOUNTS') or False
+        self.skip_cleanup = os.environ.get('SKIP_CLEANUP') or False
 
         # Log
         self.log_level = os.environ.get('LOG_LEVEL')
 
         # forget / keep
+        self.keep_last = os.environ.get('KEEP_LAST') or "7"
+        self.keep_hourly = os.environ.get('KEEP_HOURLY') or "24"
         self.keep_daily = os.environ.get('KEEP_DAILY') or "7"
         self.keep_weekly = os.environ.get('KEEP_WEEKLY') or "4"
         self.keep_monthly = os.environ.get('KEEP_MONTHLY') or "12"
         self.keep_yearly = os.environ.get('KEEP_YEARLY') or "3"
+        self.keep_tags = os.environ.get('KEEP_TAGS') or "keep"
+        self.filter_tags = os.environ.get('FILTER_TAGS') or ""
 
         if check:
             self.check()

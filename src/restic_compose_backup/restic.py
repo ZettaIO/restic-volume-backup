@@ -2,9 +2,10 @@
 Restic commands
 """
 import logging
+import os.path
 from typing import List, Tuple
 from subprocess import Popen, PIPE
-from restic_compose_backup import commands
+from restic_compose_backup import commands, utils
 
 logger = logging.getLogger(__name__)
 
@@ -19,25 +20,34 @@ def init_repo(repository: str):
     ]))
 
 
-def backup_files(repository: str, source='/volumes'):
-    return commands.run(restic(repository, [
+def backup_files(repository: str, source='/volumes', tags=''):
+    args = [
         "--verbose",
         "backup",
-        source,
-    ]))
+        source
+    ]
+
+    excludes_file = os.path.join(source, "excludes.txt")
+    if os.path.isfile(excludes_file):
+        args.extend(['--exclude-file', excludes_file])
+
+    args.extend(utils.format_tags(tags))
+    return commands.run(restic(repository, args))
 
 
-def backup_from_stdin(repository: str, filename: str, source_command: List[str]):
+def backup_from_stdin(repository: str, filename: str, source_command: List[str], tags=''):
     """
     Backs up from stdin running the source_command passed in.
     It will appear in restic with the filename (including path) passed in.
     """
-    dest_command = restic(repository, [
+    args = [
         'backup',
         '--stdin',
         '--stdin-filename',
         filename,
-    ])
+    ]
+    args.extend(utils.format_tags(tags))
+    dest_command = restic(repository, args)
 
     # pipe source command into dest command
     source_process = Popen(source_command, stdout=PIPE, bufsize=65536)
@@ -75,11 +85,15 @@ def is_initialized(repository: str) -> bool:
     return commands.run(restic(repository, ["snapshots", '--last'])) == 0
 
 
-def forget(repository: str, daily: str, weekly: str, monthly: str, yearly: str):
-    return commands.run(restic(repository, [
+def forget(repository: str, keeplast: str, hourly: str, daily: str, weekly: str, monthly: str, yearly: str, keep_tags='', filter_tags=''):
+    args = [
         'forget',
         '--group-by',
-        'paths',
+        'paths,tags',
+        '--keep-last',
+        keeplast,
+        '--keep-hourly',
+        hourly,
         '--keep-daily',
         daily,
         '--keep-weekly',
@@ -87,8 +101,11 @@ def forget(repository: str, daily: str, weekly: str, monthly: str, yearly: str):
         '--keep-monthly',
         monthly,
         '--keep-yearly',
-        yearly,
-    ]))
+        yearly
+    ]
+    args.extend(utils.format_tags(keep_tags, '--keep-tag'))
+    args.extend(utils.format_tags(filter_tags))
+    return commands.run(restic(repository, args))
 
 
 def prune(repository: str):

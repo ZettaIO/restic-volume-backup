@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from typing import List
 
-from restic_compose_backup import enums, utils
+from restic_compose_backup import enums, utils, rcon
 from restic_compose_backup.config import config
 
 logger = logging.getLogger(__name__)
@@ -46,6 +46,9 @@ class Container:
                 return containers_db.MysqlContainer(self._data)
             if self.postgresql_backup_enabled:
                 return containers_db.PostgresContainer(self._data)
+        elif self.minecraft_backup_enabled:
+            from restic_compose_backup import containers_minecraft
+            return containers_minecraft.MinecraftContainer(self._data)
         else:
             return self
 
@@ -141,12 +144,18 @@ class Container:
         return any([
             self.volume_backup_enabled,
             self.database_backup_enabled,
+            self.minecraft_backup_enabled
         ])
 
     @property
     def volume_backup_enabled(self) -> bool:
         """bool: If the ``restic-compose-backup.volumes`` label is set"""
         return utils.is_true(self.get_label(enums.LABEL_VOLUMES_ENABLED))
+
+    @property
+    def minecraft_backup_enabled(self) -> bool:
+        """bool: If the ``restic-compose-backup.minecraft``` label is set"""
+        return utils.is_true(self.get_label(enums.LABEL_MINECRAFT_ENABLED))
 
     @property
     def database_backup_enabled(self) -> bool:
@@ -178,6 +187,11 @@ class Container:
         return self.get_label(self.backup_process_label) == 'True'
 
     @property
+    def tags(self) -> str:
+        """Gets all backup tags"""
+        return self.get_label(enums.LABEL_RESTIC_TAGS)
+
+    @property
     def is_running(self) -> bool:
         """bool: Is the container running?"""
         return self._state.get('Running', False)
@@ -198,7 +212,7 @@ class Container:
         exclude_bind_mounts = utils.is_true(config.exclude_bind_mounts)
         mounts = list(filter(lambda m: not exclude_bind_mounts or m.type == "volume", self._mounts))
 
-        if not self.volume_backup_enabled:
+        if not self.volume_backup_enabled and not self.minecraft_backup_enabled:
             return filtered
 
         if self._include:
@@ -424,6 +438,15 @@ class RunningContainers:
         mounts = {}
         for container in self.containers_for_backup():
             if container.volume_backup_enabled:
+                mounts.update(container.volumes_for_backup(source_prefix=dest_prefix, mode='ro'))
+
+        return mounts
+
+    def generate_minecraft_mounts(self, dest_prefix='/minecraft') -> dict:
+        """Generate minecraft mounts for backup for the entire compose setup"""
+        mounts = {}
+        for container in self.containers_for_backup():
+            if container.minecraft_backup_enabled:
                 mounts.update(container.volumes_for_backup(source_prefix=dest_prefix, mode='ro'))
 
         return mounts
